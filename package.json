@@ -1,0 +1,20 @@
+{
+	"name": "com.gentlymadstudios.substancetotexture",
+	"displayName": "Substance To Texture",
+	"description": "A small tool for unity to convert Substance .sbsar files into plain texture files without any further dependencies.",
+	"version": "0.0.1",
+	"unity": "2022.2",
+	"license": "MIT",
+	"documentationUrl": "https://github.com/Gentlymad-Studios/SubstanceToTexture/blob/master/README.md",
+  	"changelogUrl": "https://github.com/Gentlymad-Studios/SubstanceToTexture/blob/master/CHANGELOG.md",
+  	"licensesUrl": "https://github.com/Gentlymad-Studios/SubstanceToTexture/blob/master/LICENSE.md",
+	"custom_packageJsonLink": "https://raw.githubusercontent.com/Gentlymad-Studios/SubstanceToTexture/master/package.json",
+	"author": {
+		"name": "Gentlymad Studios",
+		"url": "https://gentlymadstudios.com",
+		"email": "team@gentlymadstudios.com"
+	},
+	"dependencies": {
+		"com.unity.settings-manager": "2.0.1"
+	}
+}
