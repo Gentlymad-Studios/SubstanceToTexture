@@ -1,7 +1,7 @@
 # SubstanceToTexture
 A small tool for unity to convert Substance .sbsar files into plain texture files without any further dependencies.
 
-This repository requires additional files to be supplied by your Substance Designer installation. Please note that we are not allowed to redistribute those...
+This repository requires additional files to be supplied from your Substance Designer installation. Please note that we are not allowed to redistribute those...
 
 ![image](https://user-images.githubusercontent.com/530629/227070778-951ebd0f-29ec-4a1e-b458-811c88a4888e.png)
 
