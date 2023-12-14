@@ -40,10 +40,6 @@ namespace SubstanceToTexture {
 		internal static StringSetting substancesFileExtension = new StringSetting(GeneralCategoryKey + nameof(substancesFileExtension), ".sbsar");
 		private static string _cachedFileExtension = null;
 
-		[UserSetting(GeneralCategory, nameof(outputFileType), "File type of the textureoutput")]
-		internal static StringSetting outputFileType = new StringSetting(GeneralCategoryKey + nameof(outputFileType), "tga");
-		private static string _cachedOutputFileType = null;
-
 		[UserSetting]
 		internal static SubstanceTypeSetting substanceTypes = new SubstanceTypeSetting(GeneralCategoryKey + nameof(substanceTypes), new List<SubstanceType>());
 		private static Dictionary<string, SubstanceType> _substanceTypesLookup = null;
@@ -71,21 +67,19 @@ namespace SubstanceToTexture {
 		/// <summary>
 		/// initialize & cache values
 		/// </summary>
-		private static void Initialize(bool force=false) {
+		public static void Initialize(bool force=false) {
 			if (!_isInitalized || force) {
 				_cachedFullSubstancePath = Path.GetFullPath(pathToSubstances.value);
 				_cachedFileExtension = substancesFileExtension.value;
 				_cachedOutputDirectory = outputDirectory.value;
 				_cachedParameterDelimiter = parameterDelimiter.value;
 				_cachedpathToSBSRenderTool = Path.GetFullPath(pathToSBSRenderTool.value);
-				_cachedOutputFileType = outputFileType.value;
 
 				InitializeSubstanceLookup();
 
 				_isInitalized = true;
 			}
 		}
-
 
 		/// <summary>
 		/// Initialize the substance type lookup
@@ -173,7 +167,7 @@ namespace SubstanceToTexture {
 		/// <summary>
 		/// Method to force a repaint of the project view.
 		/// </summary>
-		private static void RepaintProjectView() {
+		public static void RepaintProjectView() {
 			Type buildSettingsType = Type.GetType("UnityEditor.ProjectBrowser,UnityEditor");
 			UnityEngine.Object[] windows = Resources.FindObjectsOfTypeAll(buildSettingsType);
 			if (windows != null && windows.Length > 0) {
@@ -210,7 +204,7 @@ namespace SubstanceToTexture {
 							Directory.CreateDirectory(outputDirectory);
 						}
 
-						ExecuteGenerationProcess(substanceType, texturePath, outputDirectory);
+						ExecuteGenerationProcess(substanceType, texturePath, outputDirectory, substanceType.identifier, substanceType.outputPostfix);
 					}
 
 				}
@@ -223,13 +217,23 @@ namespace SubstanceToTexture {
 		/// <param name="substanceType"></param>
 		/// <param name="texturePath"></param>
 		/// <param name="outputFilepath"></param>
-		private static void ExecuteGenerationProcess(SubstanceType substanceType, string texturePath, string outputDirectory) {
+		public static void ExecuteGenerationProcess(BaseSubstanceType substanceType, string texturePath, string outputDirectory, string identifier=null, string outputPostFix=null) {
+
+			string outputName = Path.GetFileNameWithoutExtension(texturePath);
+			if (identifier != null) {
+				outputName = outputName.Replace(identifier, "");
+			}
+
+			if (outputPostFix != null) {
+				outputName += outputPostFix;
+			}
+
 			string arguments = $"render ";
 			arguments += $"--input-graph {substanceType.inputGraphUrl} ";
 			arguments += $"--set-entry {substanceType.inputName}@{"\"" + Path.GetFullPath(texturePath)+ "\""} ";
-			arguments += $"--output-format {_cachedOutputFileType} ";
+			arguments += $"--output-format {substanceType.outputFileType} ";
 			arguments += $"--output-colorspace {substanceType.colorSpace} ";
-			arguments += $"--output-name {"\"" + (Path.GetFileNameWithoutExtension(texturePath).Replace(substanceType.identifier,"") + substanceType.outputPostfix ) + "\""} ";
+			arguments += $"--output-name {"\"" + outputName + "\""} ";
 			arguments += $"--output-path {"\"" + Path.GetFullPath(outputDirectory) + "\""} ";
 			arguments += $"{"\"" + Path.Combine(_cachedFullSubstancePath, substanceType.filename+_cachedFileExtension) + "\""}";
 
@@ -244,6 +248,7 @@ namespace SubstanceToTexture {
 			process.Start();
 			process.WaitForExit();
 		}
+
 	}
 
 }

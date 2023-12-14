@@ -9,3 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.1] - 2023-03-23
 ### Added
 - Initial release
+
+## [0.0.2] - 2023-12-14
+### Added
+- Exposed the API so it is easier to create custom logic for creating substances
+- Added new base SubstanceType class that is less convoluted
+- image type can now be specified for every substance
+
