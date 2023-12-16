@@ -384,7 +384,6 @@ namespace SubstanceToTexture {
 			arguments += $"--output-path {"\"" + outputFolder + "\""} ";
 			arguments += $"{"\"" + Path.Combine(_cachedFullSubstancePath, substanceType.filename + _cachedFileExtension) + "\""}";
 
-			File.AppendAllText(Path.Combine(_cachedDataPath,"debug.txt"), arguments);
 			Process process = new Process();
 			process.StartInfo.FileName = _cachedpathToSBSRenderTool;
 			process.StartInfo.Arguments = arguments;
