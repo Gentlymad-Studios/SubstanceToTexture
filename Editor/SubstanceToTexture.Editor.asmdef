@@ -1,9 +1,7 @@
 {
-    "name": "SubstanceToTexture.Editor",
+    "name": "SubstanceToTexture",
     "rootNamespace": "",
-    "references": [
-        "GUID:49818357e697641afb75d2f8acaf1861"
-    ],
+    "references": [],
     "includePlatforms": [
         "Editor"
     ],

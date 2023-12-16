@@ -16,3 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added new base SubstanceType class that is less convoluted
 - image type can now be specified for every substance
 
+## [0.0.3] - 2023-12-16
+### Added
+- Complete overhaul to make substance to texture generation much more generic
+- Added ability to create multi path substance exports
+### Removed
+- Removed file watcher as we have enough preprocessors already!
+- Removed old project settings approach
+
