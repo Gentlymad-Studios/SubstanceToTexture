@@ -24,3 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed file watcher as we have enough preprocessors already!
 - Removed old project settings approach
 
+## [0.0.4] - 2025-01-20
+### Added
+- Added parallel processing method to convert several substances in parallel
+- Added background progress bar
+
+

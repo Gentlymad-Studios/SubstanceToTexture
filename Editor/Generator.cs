@@ -6,6 +6,7 @@ using UnityEngine;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using System.Collections.Concurrent;
 
 namespace SubstanceToTexture {
 
@@ -55,8 +56,193 @@ namespace SubstanceToTexture {
 		private static async void ProcessAll() {
 			Initialize();
 			List<string> identifiers = _cachedInstructions.Where(x => !x.Value.runOnlyManually).Select(x => x.Key).ToList();
-			await ProcessSubstancesAsync(identifiers);
+			await ProcessSubstancesAsyncParallel(identifiers);
 		}
+		/// <summary>
+		/// Splits a list into smaller batches of the specified size.
+		/// </summary>
+		/// <typeparam name="T">The type of elements in the list.</typeparam>
+		/// <param name="source">The list to batch.</param>
+		/// <param name="size">The size of each batch.</param>
+		/// <returns>A list of batches, where each batch is a list of elements.</returns>
+		public static List<List<T>> Batch<T>(List<T> source, int size) {
+			if (source == null) throw new ArgumentNullException(nameof(source));
+			if (size <= 0) throw new ArgumentOutOfRangeException(nameof(size), "Batch size must be greater than 0.");
+
+			List<List<T>> result = new List<List<T>>();
+
+			for (int i = 0; i < source.Count; i += size) {
+				List<T> batch = source.Skip(i).Take(size).ToList();
+				result.Add(batch);
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// Generate substance outputs per single texture in an asynchronous fashion and with parallelism
+		/// </summary>
+		/// <param name="texturePath">The path to the texture that should be used.</param>
+		public static async Task ProcessSubstancesAsyncParallel(List<string> identifiers) {
+			Initialize();
+
+			if (processingIdentifiers.Count > 0) {
+				identifiers.RemoveAll(identifier => processingIdentifiers.Contains(identifier));
+
+				if (identifiers.Count > 0) {
+					_processingQueue.Add(identifiers);
+					UnityEngine.Debug.Log("Already processing substances, queueing!");
+				} else {
+					UnityEngine.Debug.Log("Already processing substances, please wait!");
+				}
+
+				while (_isProcessing) {
+					await Task.Delay(300);
+				}
+				return;
+			}
+
+			processingIdentifiers = identifiers;
+			if (processingIdentifiers.Count == 0) {
+				return;
+			}
+
+			_isProcessing = true;
+
+			ConcurrentBag<(OutputTextureSettings, string)> allFilesNeedingEnforcement = new ConcurrentBag<(OutputTextureSettings, string)>();
+			ConcurrentBag<string> allErrorMessages = new ConcurrentBag<string>();
+
+			// Start the overall progress task
+			//int overallProgressId = Progress.Start("Processing Substances", null, Progress.Options.None);
+			int totalIdentifiers = identifiers.Count;
+			//int identifiersProcessed = 0;
+
+			await Task.Run(() => {
+				ParallelOptions parallelOptions = new ParallelOptions {
+					MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount/2) // Use most cores
+				};
+
+				Parallel.ForEach(identifiers, parallelOptions, identifier => {
+					if (!_cachedInstructions.ContainsKey(identifier)) {
+						allErrorMessages.Add($"Identifier {identifier} not found!");
+						return;
+					}
+
+					SubstanceInstruction instruction = _cachedInstructions[identifier];
+					if (instruction.inAndOutInfos.Count == 0) {
+						allErrorMessages.Add($"Instruction ({identifier}) has no input or output info!");
+						return;
+					}
+
+					// Progress for this identifier
+					int identifierProgressId = Progress.Start($"Processing {identifier}", null, Progress.Options.None/*, overallProgressId*/);
+
+					foreach (InAndOutInfo inAndOutInfo in instruction.inAndOutInfos) {
+						string inputFolder = Path.GetFullPath(inAndOutInfo.inputFolder);
+
+						if (!Directory.Exists(inputFolder)) {
+							allErrorMessages.Add($"Instruction ({identifier}) input folder does not exist: {inputFolder}");
+							continue;
+						}
+
+						string[] files = Directory.GetFiles(inputFolder, "*.*", inAndOutInfo.searchOption);
+
+						// Batch the files for processing
+						List<List<string>> fileBatches = Batch(files.ToList(), parallelOptions.MaxDegreeOfParallelism); // Batch size of 10 files
+						int totalBatches = fileBatches.Count;
+						int batchesProcessed = 0;
+
+						foreach (List<string> batch in fileBatches) {
+							Parallel.ForEach(batch, parallelOptions, file => {
+								try {
+									string fileNameWithExtension = Path.GetFileName(file);
+									string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file);
+
+									if (InvalidName(ref fileNameWithExtension, ref fileNameWithoutExtension, ref inAndOutInfo.inputPostfix, ref instruction.globalWhitelistedNamePartials, ref inAndOutInfo.whitelistedNamePartials)) {
+										return;
+									}
+
+									string outputFolder = Path.GetFullPath(inAndOutInfo.outputFolder);
+									if (!Directory.Exists(outputFolder)) {
+										Directory.CreateDirectory(outputFolder);
+									}
+
+									if (!string.IsNullOrWhiteSpace(inAndOutInfo.inputPostfix)) {
+										fileNameWithoutExtension = fileNameWithoutExtension.Substring(0, fileNameWithoutExtension.Length - inAndOutInfo.inputPostfix.Length);
+									}
+
+									if (!string.IsNullOrWhiteSpace(inAndOutInfo.outputPostfix)) {
+										fileNameWithoutExtension += inAndOutInfo.outputPostfix;
+									}
+
+									ExecuteRenderProcess(instruction.substance, Path.GetFullPath(file), fileNameWithoutExtension, outputFolder);
+
+									string expectedFilepath = Path.Combine(outputFolder, fileNameWithoutExtension + "." + instruction.substance.outputFileType);
+
+									OutputTextureSettings outputTextureSettings = null;
+									if (inAndOutInfo.textureSettings.enforceTextureSettings) {
+										outputTextureSettings = inAndOutInfo.textureSettings;
+									} else if (instruction.globalTextureSettings.enforceTextureSettings) {
+										outputTextureSettings = instruction.globalTextureSettings;
+									}
+
+									if (outputTextureSettings != null) {
+										outputTextureSettings.sRGB = instruction.substance.colorSpace == BaseSubstanceType.ColorSpace.sRGB;
+										allFilesNeedingEnforcement.Add((outputTextureSettings, expectedFilepath));
+									}
+								} catch (Exception ex) {
+									allErrorMessages.Add($"Error processing file {file}: {ex.Message}");
+								}
+							});
+
+							// Update batch progress
+							batchesProcessed++;
+							Progress.Report(identifierProgressId, (float)batchesProcessed / totalBatches, $"Processed {batchesProcessed} of {totalBatches} batches for {identifier}");
+						}
+					}
+
+					// Finish the identifier progress
+					Progress.Finish(identifierProgressId, Progress.Status.Succeeded);
+
+					/*
+					lock (processingIdentifiers) {
+						identifiersProcessed++;
+						Progress.Report(overallProgressId, (float)identifiersProcessed / totalIdentifiers, $"Processed {identifiersProcessed} of {totalIdentifiers} identifiers");
+					}*/
+				});
+			});
+
+			// Finish the overall progress
+			//Progress.Finish(overallProgressId, Progress.Status.Succeeded);
+
+			if (allErrorMessages.Any()) {
+				UnityEngine.Debug.LogWarning(string.Join("\n", allErrorMessages));
+			}
+
+			await Task.Yield();
+			AssetDatabase.Refresh();
+
+			foreach ((OutputTextureSettings, string) file in allFilesNeedingEnforcement) {
+				await EnforceTextureSettings(file.Item1, file.Item2);
+			}
+
+			AssetDatabase.Refresh();
+			RepaintProjectView();
+			processingIdentifiers.Clear();
+			await Task.Yield();
+
+			if (_processingQueue.Count > 0) {
+				List<string> queuedIdentifiers = _processingQueue[0];
+				_processingQueue.RemoveAt(0);
+				UnityEngine.Debug.Log($"Working on queued Identifiers: {string.Join(", ", queuedIdentifiers)}");
+				await ProcessSubstancesAsyncParallel(queuedIdentifiers);
+			}
+
+			if (_processingQueue.Count == 0) {
+				_isProcessing = false;
+			}
+		}
+
 
 		/// <summary>
 		/// Generate substance outputs per single texture in an asynchronous fashion.
